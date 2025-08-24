@@ -7,17 +7,11 @@
 #include <array>
 #include <functional>
 
+#include <chrono>
+
 template<typename T>
 concept Printable = requires(T t) {
     { t.Print() } -> std::same_as<void>;
-};
-
-enum LibEnum{
-    LIB_LAB = 0,
-    LIB_D9DX = 1,
-
-
-    LibEnum_SIZE,
 };
 
 template <typename T>
@@ -32,6 +26,29 @@ struct function_traits<Result(*)(Args...)> {
 template <typename Func>
 using first_arg_t = std::tuple_element_t<0, typename function_traits<std::decay_t<Func>>::args_tuple>;
 
+
+template<uint16_t Count>
+struct BenchmarkResults {
+    std::array<std::chrono::nanoseconds, Count> total;
+    std::array<std::chrono::nanoseconds, Count> max;
+    std::array<std::chrono::nanoseconds, Count> min;
+    
+    const uint64_t iteration_count;
+
+	BenchmarkResults(uint64_t iteration_count) : iteration_count(iteration_count) {
+		total.fill(std::chrono::nanoseconds(0));
+		max.fill(std::chrono::nanoseconds(0));
+		min.fill(std::chrono::nanoseconds::max());
+	}
+
+	void Add(std::array<std::chrono::nanoseconds, Count> const& durations) {
+		for (std::size_t i = 0; i < Count; ++i) {
+			total[i] += durations[i];
+			max[i] = std::max(max[i], durations[i]);
+			min[i] = std::min(min[i], durations[i]);
+		}
+	}
+};
 
 template<typename Result, auto... Funcs>
 struct FunctionAbstraction{
@@ -66,20 +83,19 @@ struct FunctionAbstraction{
     }
 
     template<std::size_t... Is, typename... Args>
-    static std::array<std::optional<Result>, LibEnum_SIZE>
+    static std::array<std::optional<Result>, sizeof...(Funcs)>
     Call_All_Impl(std::index_sequence<Is...>, Args&&... args) {
-        // pack expansion calls Call<0>, Call<1>, ... and stores in array
         return { Call<Is>(std::forward<Args>(args)...)... }; 
     }
 
     template<typename... Args>
-    static std::array<std::optional<Result>, LibEnum_SIZE> Call_All(Args&&... args) {
-        return Call_All_Impl(std::make_index_sequence<LibEnum_SIZE>{}, std::forward<Args>(args)...);
+    static std::array<std::optional<Result>, sizeof...(Funcs)> Call_All(Args&&... args) {
+        return Call_All_Impl(std::make_index_sequence<sizeof...(Funcs)>{}, std::forward<Args>(args)...);
     }
     template<typename... Args>
     static void Call_All_Print(Args&&... args) {
         static_assert(Printable<Result>, "attempting to print with a non-printable type");
-        auto results = Call_All_Impl(std::make_index_sequence<LibEnum_SIZE>{}, std::forward<Args>(args)...);
+        auto results = Call_All_Impl(std::make_index_sequence<sizeof...(Funcs)>{}, std::forward<Args>(args)...);
         for(auto& ret : results){
             if(ret.has_value()){
                 ret->Print();
@@ -88,11 +104,39 @@ struct FunctionAbstraction{
     }
     template<typename PrintFunc, typename... Args>
     static void Call_All_PrintFunc(PrintFunc&& printFunc, Args&&... args) {
-        auto results = Call_All_Impl(std::make_index_sequence<LibEnum_SIZE>{}, std::forward<Args>(args)...);
+        auto results = Call_All_Impl(std::make_index_sequence<sizeof...(Funcs)>{}, std::forward<Args>(args)...);
         for(auto& ret : results){
             if(ret.has_value()){
                 printFunc(*ret);
             }
         }
+    }
+
+    template<std::size_t I, typename... Args>
+    static void BenchmarkOne_Time(BenchmarkResults<sizeof...(Funcs)>& results, Args&&... args) {
+        auto start = std::chrono::high_resolution_clock::now();
+        Call<I>(std::forward<Args>(args)...);
+        auto end = std::chrono::high_resolution_clock::now();
+
+        auto duration = end - start;
+        results.total[I] += duration;
+        results.max[I] = std::max(results.max[I], duration);
+        results.min[I] = std::min(results.min[I], duration);
+    }
+
+    template<std::size_t... Is, typename... Args>
+    static void BenchmarkAll_Time(BenchmarkResults<sizeof...(Funcs)>& results, std::index_sequence<Is...>, Args&&... args) {
+        (BenchmarkOne_Time<Is>(results, std::forward<Args>(args)...), ... );
+    }
+
+    template<typename... Args>
+    static BenchmarkResults<sizeof...(Funcs)> Benchmark_OneEach_Time(uint64_t iterationCount, Args&&... args) {
+        BenchmarkResults<sizeof...(Funcs)> results(iterationCount);
+
+        for (uint64_t i = 0; i < iterationCount; ++i) {
+            BenchmarkAll_Time(results, std::make_index_sequence<sizeof...(Funcs)>{}, std::forward<Args>(args)...);
+        }
+
+        return results;
     }
 };  
