@@ -79,10 +79,19 @@ struct FunctionAbstraction{
     template<typename... Args>
     static void Call_All_Print(Args&&... args) {
         static_assert(Printable<Result>, "attempting to print with a non-printable type");
-        std::array<std::optional<Result>, LibEnum_SIZE> results = Call_All_Impl(std::make_index_sequence<LibEnum_SIZE>{}, std::forward<Args>(args)...);
+        auto results = Call_All_Impl(std::make_index_sequence<LibEnum_SIZE>{}, std::forward<Args>(args)...);
         for(auto& ret : results){
             if(ret.has_value()){
                 ret->Print();
+            }
+        }
+    }
+    template<typename PrintFunc, typename... Args>
+    static void Call_All_PrintFunc(PrintFunc&& printFunc, Args&&... args) {
+        auto results = Call_All_Impl(std::make_index_sequence<LibEnum_SIZE>{}, std::forward<Args>(args)...);
+        for(auto& ret : results){
+            if(ret.has_value()){
+                printFunc(*ret);
             }
         }
     }
