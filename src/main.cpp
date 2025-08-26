@@ -11,6 +11,9 @@
 #include <cstdio>
 
 
+//might want to work this in a linux distro
+//https://www.mycpu.org/writing-bpf-c++/
+
 
 template <typename T>
 concept Addable = requires(T a, T b) {

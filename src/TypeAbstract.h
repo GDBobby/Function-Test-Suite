@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../BATS/FunctionTraits.h"
+#include "../BATS/Support/FunctionTraits.h"
 
 #include <cstdint>
 #include <cstdio>

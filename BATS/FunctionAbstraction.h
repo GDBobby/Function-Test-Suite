@@ -2,12 +2,13 @@
 
 #include <tuple>
 #include <type_traits>
-#include <utility>
 #include <array>
 #include <functional>
 #include <chrono>
 
-#include "FunctionTraits.h"
+#include "Support/FunctionTraits.h"
+#include "Support/Supporting.h"
+#include "Support/Results.h"
 
 #ifdef _MSC_VER
 #define STRINGIFY(x) #x
@@ -17,60 +18,6 @@
 #endif
 
 namespace BATS {
-
-    template<typename T>
-    inline void MAX_EQUALS(T& a, T const& b) {
-		a = a > b ? a : b;
-    }
-	template<typename T>
-	inline void MIN_EQUALS(T& a, T const& b) {
-		a = a < b ? a : b;
-	}
-
-    static uint64_t un_optimizer = 0;
-    template <class T>
-    inline void DoNotOptimize(T const& value) {
-		un_optimizer ^= reinterpret_cast<uint64_t>(&value);
-    }
-
-    template <class T>
-    inline void DoNotOptimize(T& value) {
-        un_optimizer ^= reinterpret_cast<uint64_t>(&value);
-    }
-
-    void Noop() {
-        int noop = 0;
-        DoNotOptimize(noop);
-    }
-
-    template<typename T>
-    concept Printable = requires(T t) {
-        { t.Print() } -> std::same_as<void>;
-    };
-
-
-    template<uint16_t Count>
-    struct BenchmarkResults {
-        std::array<std::chrono::nanoseconds, Count> total;
-        std::array<std::chrono::nanoseconds, Count> max;
-        std::array<std::chrono::nanoseconds, Count> min;
-
-        const uint64_t iteration_count;
-
-        BenchmarkResults(uint64_t iteration_count) : iteration_count(iteration_count) {
-            total.fill(std::chrono::nanoseconds(0));
-            max.fill(std::chrono::nanoseconds(0));
-            min.fill(std::chrono::nanoseconds::max());
-        }
-    };
-    
-    template<uint16_t Count, typename Result, typename... Args>
-    struct AccuracyResult {
-        std::tuple<Args...> args;
-        std::array<Result, Count> mismatched{};
-
-        AccuracyResult(std::array<Result, Count> const& results, std::tuple<Args...>&& args) : args{ args }, mismatched { results } {}
-    };
 
     template<typename Result, auto... Funcs>
     struct FunctionAbstraction {
