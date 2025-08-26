@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../BATS/FunctionTraits.h"
+
 #include <cstdint>
 #include <cstdio>
 #include <variant>
@@ -13,6 +15,18 @@ template <typename LabType, typename... Types>
 struct TypeAbstraction{
     LabType value;
 
+
+    static TypeAbstraction GenerateRandom(float lowerBound, float upperBound) {
+        TypeAbstraction ret{};
+		constexpr std::size_t float_count = sizeof(TypeAbstraction) / sizeof(float);
+        float buffer[float_count];
+        for (uint8_t i = 0; i < float_count; i++) {
+            buffer[i] = BATS::random_value<float>(lowerBound, upperBound);
+        }
+		memcpy(&ret, buffer, sizeof(TypeAbstraction));
+        return ret;
+    }
+
     template <typename T>
     requires InTypes<T, LabType, Types...>
     TypeAbstraction(T const& v) {
@@ -23,6 +37,8 @@ struct TypeAbstraction{
             memcpy(&value, &v, sizeof(LabType));
         }
     }
+    
+	TypeAbstraction() = default;
 
     template <typename T>
     requires InTypes<T, LabType, Types...>

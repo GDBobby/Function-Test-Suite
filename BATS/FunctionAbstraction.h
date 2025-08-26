@@ -3,11 +3,11 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <optional>
 #include <array>
 #include <functional>
-
 #include <chrono>
+
+#include "FunctionTraits.h"
 
 #ifdef _MSC_VER
 #define STRINGIFY(x) #x
@@ -17,8 +17,6 @@
 #endif
 
 namespace BATS {
-
-
 
     template<typename T>
     inline void MAX_EQUALS(T& a, T const& b) {
@@ -50,18 +48,6 @@ namespace BATS {
         { t.Print() } -> std::same_as<void>;
     };
 
-    template <typename T>
-    struct function_traits;
-
-    template <typename Result, typename... Args>
-    struct function_traits<Result(*)(Args...)> {
-        using result_type = Result;
-        using args_tuple = std::tuple<Args...>;
-        static constexpr std::size_t arity = sizeof...(Args);
-    };
-    template <typename Func>
-    using first_arg_t = std::tuple_element_t<0, typename function_traits<std::decay_t<Func>>::args_tuple>;
-
 
     template<uint16_t Count>
     struct BenchmarkResults {
@@ -77,10 +63,20 @@ namespace BATS {
             min.fill(std::chrono::nanoseconds::max());
         }
     };
+    
+    template<uint16_t Count, typename Result, typename... Args>
+    struct AccuracyResult {
+        std::tuple<Args...> args;
+        std::array<Result, Count> mismatched{};
+
+        AccuracyResult(std::array<Result, Count> const& results, std::tuple<Args...>&& args) : args{ args }, mismatched { results } {}
+    };
 
     template<typename Result, auto... Funcs>
     struct FunctionAbstraction {
         static constexpr auto funcs = std::tuple{ Funcs... };
+        using first_func_t = std::remove_cv_t<std::remove_reference_t<decltype(std::get<0>(funcs))>>;
+        using first_func_args_t = typename Function_Traits<first_func_t>::args_tuple;
 
         template <std::size_t I, typename... Args>
         static decltype(auto) Call(Args&&... args) {
@@ -211,6 +207,46 @@ namespace BATS {
 
             return results;
         }
+
+
+
+
+
+        template<std::size_t I, typename Tuple, std::size_t... Js>
+        static Result Benchmark_Each_Helper_Helper_Accuracy(std::index_sequence<Js...>, Tuple&& args) {
+            return Call<I>(std::get<Js>(std::forward<Tuple>(args))...);
+        }
+
+        template<std::size_t... Is, typename Tuple>
+        static std::array<Result, sizeof...(Is)>
+            Benchmark_Each_Helper_Accuracy(std::index_sequence<Is...>, Tuple&& args) {
+            return { Benchmark_Each_Helper_Helper_Accuracy<Is>(
+                         std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{},
+                         std::forward<Tuple>(args))... };
+        }
+
+        
+        template<typename U, typename... Args>
+        static std::vector<AccuracyResult<sizeof...(Funcs), Result, std::tuple<Args...>>> Benchmark_Each_Accuracy(uint64_t iterationCount, U random_lowerBound, U random_upperBound) {
+            std::vector<AccuracyResult<sizeof...(Funcs), Result, std::tuple<Args...>>> results{};
+
+            for (uint64_t i = 0; i < iterationCount; ++i) {
+                auto args = GenerateRandomTuple<U, Args...>(random_lowerBound, random_upperBound);
+                std::array<Result, sizeof...(Funcs)> ret = Benchmark_Each_Helper_Accuracy(std::make_index_sequence<sizeof...(Funcs)>{}, args);
+                bool mismatch = false;
+                for (uint16_t i = 1; i < sizeof...(Funcs); i++) {
+                    mismatch |= memcmp(&ret[i], &ret[0], sizeof(Result)) != 0;
+                }
+
+                if (mismatch) {
+                    results.emplace_back(ret, args);
+                }
+            }
+
+            return results;
+        }
+
+
     };
 
 

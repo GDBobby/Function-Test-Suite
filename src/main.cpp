@@ -1,5 +1,5 @@
 #include "PrintAbstraction.h"
-#include "FunctionAbstraction.h"
+#include "../BATS/FunctionAbstraction.h"
 #include "LAB/Vector.h"
 #include "LAB/Matrix.h"
 #include "LAB/Quaternion.h"
@@ -9,6 +9,8 @@
 
 #include <cstdint>
 #include <cstdio>
+
+
 
 template <typename T>
 concept Addable = requires(T a, T b) {
@@ -88,6 +90,18 @@ int main(){
 
     {
         auto results = BATS::FunctionAbstraction<void, TestFunc>::Benchmark_Batch_Time(10, 10);
+    }
+    {
+        auto mismatchResults = Vec4AddAbst::Benchmark_Each_Accuracy<float, VecAbstract4, VecAbstract4>(1, -100.f, 100.f);
+        printf("\nmismatch size : %lld", mismatchResults.size());
+
+        //i was debugging here step by step here, leaving it in casei need to debug again later
+        //auto temp1 = BATS::random_value<VecAbstract4>(-100.f, 100.f);
+        //auto temp2 = BATS::random_value<VecAbstract4>(-100.f, 100.f);
+		//auto args = BATS::Function_Traits<Vec4AddAbst::first_func_t>::random_args(-100.f, 100.f);
+		//auto random_tuple = BATS::GenerateRandomTuple<float, VecAbstract4, VecAbstract4>(-100.f, 100.f);
+
+
     }
     return EXIT_SUCCESS;
 }
