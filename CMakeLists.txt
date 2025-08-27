@@ -45,6 +45,8 @@ option(USE_AVX2_INTERNAL "Enable AVX2 optimizations" ON)
       endif()
   endif()
 
+add_compile_definitions(LAB_ROW_MAJOR)
+
 message(STATUS "including directories")
 target_include_directories(${PROJECT_NAME} PUBLIC
 	${DX9_PATH}/Include

@@ -8,12 +8,12 @@
 #include <type_traits>
 #include <concepts>
 
-template <typename T, typename LabType, typename... Types>
-concept InTypes = std::same_as<T, LabType> || (std::same_as<T, Types> || ...);
+template <typename T, typename MainType, typename... Types>
+concept InTypes = std::same_as<T, MainType> || (std::same_as<T, Types> || ...);
 
-template <typename LabType, typename... Types>
+template <typename MainType, typename... Types>
 struct TypeAbstraction{
-    LabType value;
+    MainType value;
 
 
     static TypeAbstraction GenerateRandom(float lowerBound, float upperBound) {
@@ -28,22 +28,22 @@ struct TypeAbstraction{
     }
 
     template <typename T>
-    requires InTypes<T, LabType, Types...>
+    requires InTypes<T, MainType, Types...>
     TypeAbstraction(T const& v) {
-        if constexpr (std::same_as<T, LabType>) {
+        if constexpr (std::same_as<T, MainType>) {
             value = v;
         }
         else {
-            memcpy(&value, &v, sizeof(LabType));
+            memcpy(&value, &v, sizeof(MainType));
         }
     }
     
 	TypeAbstraction() = default;
 
     template <typename T>
-    requires InTypes<T, LabType, Types...>
+    requires InTypes<T, MainType, Types...>
     operator T&() {
-        if constexpr (std::same_as<T, LabType>) {
+        if constexpr (std::same_as<T, MainType>) {
             return value;
         }
         else {
@@ -52,13 +52,35 @@ struct TypeAbstraction{
     }
 
     template <typename T>
-    requires InTypes<T, LabType,Types...>
+    requires InTypes<T, MainType,Types...>
     operator const T&() const {
-        if constexpr (std::same_as<T, LabType>) {
+        if constexpr (std::same_as<T, MainType>) {
             return value;
         }
         else {
-            return *reinterpret_cast<T*>(&value);
+            return *reinterpret_cast<const T*>(&value);
+        }
+    }
+
+    template <typename T>
+        requires InTypes<T, MainType, Types...>
+    operator T* () {
+        if constexpr (std::same_as<T, MainType>) {
+            return &value;
+        }
+        else {
+            return reinterpret_cast<T*>(&value);
+        }
+    }
+
+    template <typename T>
+        requires InTypes<T, MainType, Types...>
+    operator const T* () const {
+        if constexpr (std::same_as<T, MainType>) {
+            return &value;
+        }
+        else {
+            return reinterpret_cast<const T*>(&value);
         }
     }
 };

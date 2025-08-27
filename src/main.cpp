@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 
 
 //might want to work this in a linux distro
@@ -28,12 +29,21 @@ T AddT(T a, T b) {
 using VecAbstract2 = TypeAbstraction<lab::Vector<float, 2>, D3DXVECTOR2>;
 using VecAbstract3 = TypeAbstraction<lab::Vector<float, 3>, D3DXVECTOR3>;
 using VecAbstract4 = TypeAbstraction<lab::Vector<float, 4>, D3DXVECTOR4>;
-using QuatAbstraction = TypeAbstraction<lab::Quaternion<float>, D3DXQUATERNION>;
+using QuatAbst = TypeAbstraction<lab::Quaternion<float>, D3DXQUATERNION>;
+using MatAbst = TypeAbstraction<lab::Matrix<float, 4, 4>, D3DXMATRIX>;
 
 using Vec2AddAbst = BATS::FunctionAbstraction<VecAbstract2, AddT<lab::Vector<float, 2>>, AddT<D3DXVECTOR2>>;
 using Vec3AddAbst = BATS::FunctionAbstraction<VecAbstract3, AddT<lab::Vector<float, 3>>, AddT<D3DXVECTOR3>>;
 using Vec4AddAbst = BATS::FunctionAbstraction<VecAbstract4, AddT<lab::Vector<float, 4>>, AddT<D3DXVECTOR4>>;
 
+using MatPtr = lab::Matrix<float, 4, 4>(lab::Matrix<float, 4, 4>::*)(const lab::Matrix<float, 4, 4>&) const;
+
+using Mat4MultiAbst = BATS::FunctionAbstraction<
+    MatAbst, 
+    static_cast<lab::Matrix<float, 4, 4>(lab::Matrix<float, 4, 4>::*)(const lab::Matrix<float, 4, 4>&) const>(&lab::Matrix<float, 4, 4>::operator*), 
+    static_cast<D3DXMATRIX(D3DXMATRIX::*)(const D3DXMATRIX&) const>(
+        &D3DXMATRIX::operator*)
+>;
 
 void TestFunc() {
     int testing = 0;
@@ -65,7 +75,7 @@ int main(){
 	VecAbstract4 vec4B(lab::Vector<float, 4>{ 5.f, 6.f, 7.f, 8.f });
     Vec4AddAbst::Call_All_PrintFunc(&Print<VecAbstract4>, vec4A, vec4B);
 
-    QuatAbstraction quat{lab::Quaternion<float>(0.f, 1.f, 2.f, 3.f)};
+    QuatAbst quat{lab::Quaternion<float>(0.f, 1.f, 2.f, 3.f)};
     {
         auto results = Vec4AddAbst::Benchmark_OneEach_Time(1000, vec4A, vec4B);
 		printf("\none each results:\n");
@@ -95,7 +105,7 @@ int main(){
         auto results = BATS::FunctionAbstraction<void, TestFunc>::Benchmark_Batch_Time(10, 10);
     }
     {
-        auto mismatchResults = Vec4AddAbst::Benchmark_Each_Accuracy<float, VecAbstract4, VecAbstract4>(1, -100.f, 100.f);
+        auto mismatchResults = Vec4AddAbst::Benchmark_Each_Accuracy<float, VecAbstract4, VecAbstract4>(5, -100.f, 100.f);
         printf("\nmismatch size : %lld", mismatchResults.size());
 
         //i was debugging here step by step here, leaving it in casei need to debug again later
@@ -103,8 +113,10 @@ int main(){
         //auto temp2 = BATS::random_value<VecAbstract4>(-100.f, 100.f);
 		//auto args = BATS::Function_Traits<Vec4AddAbst::first_func_t>::random_args(-100.f, 100.f);
 		//auto random_tuple = BATS::GenerateRandomTuple<float, VecAbstract4, VecAbstract4>(-100.f, 100.f);
-
-
+    }
+    {
+		auto mismatchResults = Mat4MultiAbst::Benchmark_Each_Accuracy<float, MatAbst, MatAbst>(5, -100.f, 100.f);
+        printf("\nmismatch size : %lld", mismatchResults.size());
     }
     return EXIT_SUCCESS;
 }

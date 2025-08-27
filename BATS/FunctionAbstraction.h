@@ -22,8 +22,23 @@ namespace BATS {
     template<typename Result, auto... Funcs>
     struct FunctionAbstraction {
         static constexpr auto funcs = std::tuple{ Funcs... };
-        using first_func_t = std::remove_cv_t<std::remove_reference_t<decltype(std::get<0>(funcs))>>;
-        using first_func_args_t = typename Function_Traits<first_func_t>::args_tuple;
+
+        template<std::size_t I, typename Class_Object, typename... Args>
+        static decltype(auto) Call_ClassObject(Class_Object&& classObj, Args&&... args) {
+            constexpr auto F = std::get<I>(funcs);
+
+            using ObjType = Function_Traits<std::decay_t<decltype(F)>>::Class_Type;
+            ObjType& realObj = static_cast<ObjType&>(classObj);
+            using FuncResult = Function_Traits<std::decay_t<decltype(F)>>::Return_Type;
+
+            if constexpr (std::is_void_v<FuncResult>) {
+                (realObj.*F)(std::forward<Args>(args)...);
+                return;
+            }
+            else {
+                return (realObj.*F)(std::forward<Args>(args)...);
+            }
+        }
 
         template <std::size_t I, typename... Args>
         static decltype(auto) Call(Args&&... args) {
@@ -31,8 +46,13 @@ namespace BATS {
             if constexpr (F == nullptr) {
                 return;
             }
+            else if constexpr (Function_Traits<std::decay_t<decltype(F)>>::is_member_function) {
+                static_assert(sizeof...(Args) > 0, "Member function requires object as first argument");
+				return Call_ClassObject<I>(std::forward<Args>(args)...);
+            }
             else {
                 using FuncResult = std::invoke_result_t<decltype(F), Args...>;
+                using FirstParamType = first_arg_t<decltype(F)>;
                 if constexpr (std::is_same_v<FuncResult, Result> || std::is_convertible_v<FuncResult, Result>) {
                     if constexpr (std::is_void_v<Result>) {
                         std::get<I>(funcs)(std::forward<Args>(args)...);
@@ -42,14 +62,21 @@ namespace BATS {
                         return std::get<I>(funcs)(std::forward<Args>(args)...);
                     }
                 }
-                else {
-                    using FirstParamType = first_arg_t<decltype(F)>;
-                    static_assert(std::is_lvalue_reference_v<FirstParamType>, "if the first param isn't the out param, the function needs special handling");
-                    using RetType = std::remove_reference_t<FirstParamType>;
+                else if constexpr(std::is_same_v<Result, std::decay_t<FirstParamType>>) {
+                    using RetType = std::decay_t<FirstParamType>;
                     static_assert(std::is_same_v<RetType, Result> || std::is_convertible_v<RetType, Result>, "First param should match the return type");
                     RetType ret{};
                     std::get<I>(funcs)(ret, std::forward<Args>(args)...);
                     return ret;
+                }
+                else if constexpr (std::is_same_v<Result*, std::decay_t<FirstParamType>>) {
+                    using RetType = std::remove_pointer_t<std::decay_t<FirstParamType>>;
+                    RetType ret{};
+                    std::get<I>(funcs)(&ret, std::forward<Args>(args)...);
+                    return ret;
+                }
+                else {
+                    static_assert(std::is_lvalue_reference_v<FirstParamType> || std::is_pointer_v<FirstParamType>, "if the first param isn't the out param, the function needs special handling");
                 }
             }
         }
@@ -161,7 +188,13 @@ namespace BATS {
 
         template<std::size_t I, typename Tuple, std::size_t... Js>
         static Result Benchmark_Each_Helper_Helper_Accuracy(std::index_sequence<Js...>, Tuple&& args) {
-            return Call<I>(std::get<Js>(std::forward<Tuple>(args))...);
+            if constexpr (std::is_void_v<Result>) {
+                Call<I>(std::get<Js>(std::forward<Tuple>(args))...);
+                return;
+            }
+            else {
+                return Call<I>(std::get<Js>(std::forward<Tuple>(args))...);
+            }
         }
 
         template<std::size_t... Is, typename Tuple>
