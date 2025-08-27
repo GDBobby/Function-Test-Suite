@@ -29,6 +29,7 @@ T AddT(T a, T b) {
 using VecAbstract2 = TypeAbstraction<lab::Vector<float, 2>, D3DXVECTOR2>;
 using VecAbstract3 = TypeAbstraction<lab::Vector<float, 3>, D3DXVECTOR3>;
 using VecAbstract4 = TypeAbstraction<lab::Vector<float, 4>, D3DXVECTOR4>;
+
 using QuatAbst = TypeAbstraction<lab::Quaternion<float>, D3DXQUATERNION>;
 using MatAbst = TypeAbstraction<lab::Matrix<float, 4, 4>, D3DXMATRIX>;
 
@@ -36,14 +37,37 @@ using Vec2AddAbst = BATS::FunctionAbstraction<VecAbstract2, AddT<lab::Vector<flo
 using Vec3AddAbst = BATS::FunctionAbstraction<VecAbstract3, AddT<lab::Vector<float, 3>>, AddT<D3DXVECTOR3>>;
 using Vec4AddAbst = BATS::FunctionAbstraction<VecAbstract4, AddT<lab::Vector<float, 4>>, AddT<D3DXVECTOR4>>;
 
-using MatPtr = lab::Matrix<float, 4, 4>(lab::Matrix<float, 4, 4>::*)(const lab::Matrix<float, 4, 4>&) const;
-
 using Mat4MultiAbst = BATS::FunctionAbstraction<
     MatAbst, 
     static_cast<lab::Matrix<float, 4, 4>(lab::Matrix<float, 4, 4>::*)(const lab::Matrix<float, 4, 4>&) const>(&lab::Matrix<float, 4, 4>::operator*), 
     static_cast<D3DXMATRIX(D3DXMATRIX::*)(const D3DXMATRIX&) const>(
         &D3DXMATRIX::operator*)
 >;
+
+template<auto Func, typename T>
+T DXWrapper(T a, T b) {
+    T ret;
+    Func(&ret, &a, &b);
+    return ret;
+}
+
+using CrossAbst = BATS::FunctionAbstraction<
+    VecAbstract3,
+    lab::Cross<float, 3>,
+	DXWrapper<D3DXVec3Cross, D3DXVECTOR3>
+>;
+
+using DotAbst = BATS::FunctionAbstraction<
+    float,
+    lab::Dot<float, 3>,
+    D3DXVec3Dot
+>;
+
+
+lab::Quat::AngleAxis D3DXQuaternionToAxisAngle
+
+D3DXQUATERNION* WINAPI D3DXQuaternionRotationMatrix
+(D3DXQUATERNION* pOut, CONST D3DXMATRIX* pM);
 
 void TestFunc() {
     int testing = 0;
@@ -106,7 +130,7 @@ int main(){
     }
     {
         auto mismatchResults = Vec4AddAbst::Benchmark_Each_Accuracy<float, VecAbstract4, VecAbstract4>(5, -100.f, 100.f);
-        printf("\nmismatch size : %lld", mismatchResults.size());
+        printf("\nvec4+ - mismatch size : %lld", mismatchResults.size());
 
         //i was debugging here step by step here, leaving it in casei need to debug again later
         //auto temp1 = BATS::random_value<VecAbstract4>(-100.f, 100.f);
@@ -115,8 +139,16 @@ int main(){
 		//auto random_tuple = BATS::GenerateRandomTuple<float, VecAbstract4, VecAbstract4>(-100.f, 100.f);
     }
     {
-		auto mismatchResults = Mat4MultiAbst::Benchmark_Each_Accuracy<float, MatAbst, MatAbst>(5, -100.f, 100.f);
-        printf("\nmismatch size : %lld", mismatchResults.size());
+        auto mismatchResults = Mat4MultiAbst::Benchmark_Each_Accuracy<float, MatAbst, MatAbst>(5, -100.f, 100.f);
+        printf("\nm4*m4 - mismatch size : %lld", mismatchResults.size());
+    }
+    {
+        auto mismatchResults = CrossAbst::Benchmark_Each_Accuracy<float, VecAbstract3, VecAbstract3>(5, -100.f, 100.f);
+        printf("\ncross - mismatch size : %lld", mismatchResults.size());
+    }
+    {
+        auto mismatchResults = DotAbst::Benchmark_Each_Accuracy<float, VecAbstract3, VecAbstract3>(5, -100.f, 100.f);
+        printf("\ndot - mismatch size : %lld", mismatchResults.size());
     }
     return EXIT_SUCCESS;
 }
