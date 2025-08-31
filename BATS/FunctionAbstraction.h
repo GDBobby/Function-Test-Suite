@@ -12,7 +12,7 @@
 
 #ifdef _MSC_VER
 #define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
+#define TOSTRING(x) #x
 
 #pragma message(__FILE__ "(" TOSTRING(__LINE__) "): Benchmarking a void function (not Noop)")
 #endif
@@ -213,14 +213,7 @@ namespace BATS {
             for (uint64_t i = 0; i < iterationCount; ++i) {
                 auto args = GenerateRandomTuple<U, Args...>(random_lowerBound, random_upperBound);
                 std::array<Result, sizeof...(Funcs)> ret = Benchmark_Each_Helper_Accuracy(std::make_index_sequence<sizeof...(Funcs)>{}, args);
-                bool mismatch = false;
-                for (uint16_t i = 1; i < sizeof...(Funcs); i++) {
-                    mismatch |= memcmp(&ret[i], &ret[0], sizeof(Result)) != 0;
-                }
-
-                if (mismatch) {
-                    results.emplace_back(ret, args);
-                }
+                results.emplace_back(ret, args);
             }
 
             return results;

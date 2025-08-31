@@ -15,7 +15,6 @@ template <typename MainType, typename... Types>
 struct TypeAbstraction{
     MainType value;
 
-
     static TypeAbstraction GenerateRandom(float lowerBound, float upperBound) {
         TypeAbstraction ret{};
 		constexpr std::size_t float_count = sizeof(TypeAbstraction) / sizeof(float);

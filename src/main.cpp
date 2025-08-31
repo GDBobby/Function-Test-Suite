@@ -26,6 +26,31 @@ T AddT(T a, T b) {
     return a + b;
 }
 
+template <typename T>
+constexpr auto AddrIfNotFundamental(T& value) {
+    if constexpr (std::is_fundamental_v<T> || std::is_enum_v<T>) {
+        return value;  // return by value
+    }
+    else {
+        return &value; // return pointer for classes/structs
+    }
+}
+
+template<auto Func>
+struct DXWrapper;
+
+// Specialization for functions like R* f(R*, Args...)
+template<typename R, typename... Args, R* (WINAPI* Func)(R*, Args...)>
+struct DXWrapper<Func> {
+    using Return = R;
+
+    static Return Call(std::remove_pointer_t<Args>... args) {
+        R out{};
+        Func(&out, AddrIfNotFundamental(args)...);
+        return out;
+    }
+};
+
 using VecAbstract2 = TypeAbstraction<lab::Vector<float, 2>, D3DXVECTOR2>;
 using VecAbstract3 = TypeAbstraction<lab::Vector<float, 3>, D3DXVECTOR3>;
 using VecAbstract4 = TypeAbstraction<lab::Vector<float, 4>, D3DXVECTOR4>;
@@ -37,43 +62,63 @@ using Vec2AddAbst = BATS::FunctionAbstraction<VecAbstract2, AddT<lab::Vector<flo
 using Vec3AddAbst = BATS::FunctionAbstraction<VecAbstract3, AddT<lab::Vector<float, 3>>, AddT<D3DXVECTOR3>>;
 using Vec4AddAbst = BATS::FunctionAbstraction<VecAbstract4, AddT<lab::Vector<float, 4>>, AddT<D3DXVECTOR4>>;
 
-using Mat4MultiAbst = BATS::FunctionAbstraction<
-    MatAbst, 
-    static_cast<lab::Matrix<float, 4, 4>(lab::Matrix<float, 4, 4>::*)(const lab::Matrix<float, 4, 4>&) const>(&lab::Matrix<float, 4, 4>::operator*), 
-    static_cast<D3DXMATRIX(D3DXMATRIX::*)(const D3DXMATRIX&) const>(
-        &D3DXMATRIX::operator*)
->;
 
-template<auto Func, typename T>
-T DXWrapper(T a, T b) {
-    T ret;
-    Func(&ret, &a, &b);
+D3DXQUATERNION DxAngleAxis(float angle, D3DXVECTOR3 vec) {
+    D3DXQUATERNION ret;
+    D3DXQuaternionRotationAxis(&ret, &vec, angle);
     return ret;
 }
 
-using CrossAbst = BATS::FunctionAbstraction<
-    VecAbstract3,
-    lab::Cross<float, 3>,
-	DXWrapper<D3DXVec3Cross, D3DXVECTOR3>
->;
-
-using DotAbst = BATS::FunctionAbstraction<
-    float,
-    lab::Dot<float, 3>,
-    D3DXVec3Dot
->;
 
 
-lab::Quat::AngleAxis D3DXQuaternionToAxisAngle
 
-D3DXQUATERNION* WINAPI D3DXQuaternionRotationMatrix
-(D3DXQUATERNION* pOut, CONST D3DXMATRIX* pM);
+D3DXMATRIX FlippedInputRotationAxis(float angle, D3DXVECTOR3 axis) {
+    D3DXMATRIX ret;
+    D3DXMatrixRotationAxis(&ret, &axis, angle);
+    return ret;
+}
+
+
+lab::vec3 LAB_VEC3_MAT(lab::vec3 const& in_vec, lab::mat4 const& mat) {
+    const lab::vec4 tempVec(in_vec, 1.f);
+    const lab::vec4 out = tempVec * mat;
+    return lab::vec3(out) / out.w;
+}
+D3DXVECTOR3 DX_VEC3_MAT(D3DXVECTOR3& in_vec, D3DXMATRIX& mat) {
+    D3DXVECTOR3 out;
+
+    FLOAT x = in_vec.x * mat._11 + in_vec.y * mat._21 + in_vec.z * mat._31 + mat._41;
+    FLOAT y = in_vec.x * mat._12 + in_vec.y * mat._22 + in_vec.z * mat._32 + mat._42;
+    FLOAT z = in_vec.x * mat._13 + in_vec.y * mat._23 + in_vec.z * mat._33 + mat._43;
+    FLOAT w = in_vec.x * mat._14 + in_vec.y * mat._24 + in_vec.z * mat._34 + mat._44;
+
+    out.x = x / w;
+    out.y = y / w;
+    out.z = z / w;
+
+    return out;
+}
+
+
 
 void TestFunc() {
     int testing = 0;
 }
 
+template<typename T>
+void PrintResults(std::string const& name, std::vector<T>& results, const float epsilon) {
+    T::Print(name, results, epsilon);
+}
+
+D3DXMATRIX DXInverse(D3DXMATRIX input) {
+    D3DXMATRIX ret;
+    float det;
+    D3DXMatrixInverse(&ret, &det, &input);
+    return ret;
+}
+
 int main(){
+    /*
     VecAbstract2 vector2A(lab::Vector<float, 2>{4.f, 1.f});
     VecAbstract2 vector2B(lab::Vector<float, 2>{3.f, 3.f});
 
@@ -128,9 +173,11 @@ int main(){
     {
         auto results = BATS::FunctionAbstraction<void, TestFunc>::Benchmark_Batch_Time(10, 10);
     }
+    */
+    const float epsilon = 0.0001f;// 1f;
     {
-        auto mismatchResults = Vec4AddAbst::Benchmark_Each_Accuracy<float, VecAbstract4, VecAbstract4>(5, -100.f, 100.f);
-        printf("\nvec4+ - mismatch size : %lld", mismatchResults.size());
+        auto mismatchResults = Vec4AddAbst::Benchmark_Each_Accuracy<float, VecAbstract4, VecAbstract4>(50, -100.f, 100.f);
+        PrintResults("vec4+", mismatchResults, epsilon);
 
         //i was debugging here step by step here, leaving it in casei need to debug again later
         //auto temp1 = BATS::random_value<VecAbstract4>(-100.f, 100.f);
@@ -139,16 +186,133 @@ int main(){
 		//auto random_tuple = BATS::GenerateRandomTuple<float, VecAbstract4, VecAbstract4>(-100.f, 100.f);
     }
     {
-        auto mismatchResults = Mat4MultiAbst::Benchmark_Each_Accuracy<float, MatAbst, MatAbst>(5, -100.f, 100.f);
-        printf("\nm4*m4 - mismatch size : %lld", mismatchResults.size());
+        using Mat4MultiAbst = BATS::FunctionAbstraction<
+            MatAbst,
+            static_cast<lab::Matrix<float, 4, 4>(lab::Matrix<float, 4, 4>::*)(const lab::Matrix<float, 4, 4>&) const>(&lab::Matrix<float, 4, 4>::operator*),
+            static_cast<D3DXMATRIX(D3DXMATRIX::*)(const D3DXMATRIX&) const>(
+                &D3DXMATRIX::operator*)
+        >;
+        auto mismatchResults = Mat4MultiAbst::Benchmark_Each_Accuracy<float, MatAbst, MatAbst>(50, -100.f, 100.f);
+        PrintResults("m4*m4", mismatchResults, epsilon);
     }
     {
-        auto mismatchResults = CrossAbst::Benchmark_Each_Accuracy<float, VecAbstract3, VecAbstract3>(5, -100.f, 100.f);
-        printf("\ncross - mismatch size : %lld", mismatchResults.size());
+        using CrossAbst = BATS::FunctionAbstraction<
+            VecAbstract3,
+            lab::Cross<float, 3>,
+            &DXWrapper<D3DXVec3Cross>::Call
+        >;
+        auto mismatchResults = CrossAbst::Benchmark_Each_Accuracy<float, VecAbstract3, VecAbstract3>(50, -100.f, 100.f);
+        PrintResults("cross", mismatchResults, epsilon);
     }
     {
-        auto mismatchResults = DotAbst::Benchmark_Each_Accuracy<float, VecAbstract3, VecAbstract3>(5, -100.f, 100.f);
-        printf("\ndot - mismatch size : %lld", mismatchResults.size());
+        using DotAbst = BATS::FunctionAbstraction<
+            float,
+            lab::Dot<float, 3>,
+            D3DXVec3Dot
+        >;
+        auto mismatchResults = DotAbst::Benchmark_Each_Accuracy<float, VecAbstract3, VecAbstract3>(50, -100.f, 100.f);
+        PrintResults("dot", mismatchResults, epsilon);
     }
+	{
+        using AngleAxisAbst = BATS::FunctionAbstraction<
+            QuatAbst,
+            lab::Quat::AngleAxis,
+            DxAngleAxis
+        >;
+		auto mismatchResults = AngleAxisAbst::Benchmark_Each_Accuracy<float, float, VecAbstract3>(50, -100.f, 100.f);
+        PrintResults("angle axis", mismatchResults, epsilon);
+	}
+    {
+        using MatFromQuatAbst = BATS::FunctionAbstraction <
+            MatAbst,
+            static_cast<lab::Matrix<float, 4, 4>(*)(lab::Quat const&)>(&lab::Quat::ToMat4),
+            DXWrapper<D3DXMatrixRotationQuaternion>::Call
+        >;
+        auto mismatchResults = MatFromQuatAbst::Benchmark_Each_Accuracy<float, QuatAbst>(50, -100.f, 100.f);
+        PrintResults("mat from quat", mismatchResults, epsilon);
+    }
+    {
+        using QuatFromMatAbst = BATS::FunctionAbstraction<
+            QuatAbst,
+            lab::Quat::FromMatrix,
+            DXWrapper<D3DXQuaternionRotationMatrix>::Call
+        >;
+        auto mismatchResults = QuatFromMatAbst::Benchmark_Each_Accuracy<float, MatAbst>(50, -100.f, 100.f);
+        PrintResults("quat from mat", mismatchResults, epsilon);
+    } 
+    {
+        using Vec3Mat4Abst = BATS::FunctionAbstraction<
+            VecAbstract3,
+            LAB_VEC3_MAT,
+            DX_VEC3_MAT
+        >;
+        auto mismatchResults = Vec3Mat4Abst::Benchmark_Each_Accuracy<float, VecAbstract3, MatAbst>(50, -100.f, 100.f);
+        PrintResults("vec3 * mat4", mismatchResults, epsilon);
+    }
+    {
+        using RotXAbst = BATS::FunctionAbstraction<
+            MatAbst,
+            lab::RotateAroundX<float>,
+            DXWrapper<D3DXMatrixRotationX>::Call
+        >;
+		auto mismatchResults = RotXAbst::Benchmark_Each_Accuracy<float, float>(50, -100.f, 100.f);
+		PrintResults("rot x", mismatchResults, epsilon);
+	}
+    {
+        using RotYAbst = BATS::FunctionAbstraction<
+            MatAbst,
+            lab::RotateAroundY<float>,
+            DXWrapper<D3DXMatrixRotationY>::Call
+        >;
+        auto mismatchResults = RotYAbst::Benchmark_Each_Accuracy<float, float>(50, -100.f, 100.f);
+        PrintResults("rot y", mismatchResults, epsilon);
+    }
+    {
+        using RotZAbst = BATS::FunctionAbstraction<
+            MatAbst,
+            lab::RotateAroundZ<float>,
+            DXWrapper<D3DXMatrixRotationZ>::Call
+        >;
+        auto mismatchResults = RotZAbst::Benchmark_Each_Accuracy<float, float>(50, -100.f, 100.f);
+        PrintResults("rot z", mismatchResults, epsilon);
+    }
+    {
+        using RotAxisAbst = BATS::FunctionAbstraction<
+            MatAbst,
+            lab::RotateAroundAxis<float>,
+            FlippedInputRotationAxis
+        >;
+        auto mismatchResults = RotAxisAbst::Benchmark_Each_Accuracy<float, float, VecAbstract3>(50, -100.f, 100.f);
+        PrintResults("rot axis", mismatchResults, epsilon);
+    }
+    {
+        auto mismatchResults = BATS::FunctionAbstraction<
+            QuatAbst,
+            lab::Quaternion<float>::Slerp,
+            DXWrapper<D3DXQuaternionSlerp>::Call
+        >::Benchmark_Each_Accuracy<float, QuatAbst, QuatAbst, float>(50, 0.f, 1.f);
+        PrintResults("quat slerp", mismatchResults, epsilon);
+    }
+    {
+        auto mismatchResults = BATS::FunctionAbstraction<
+            MatAbst,
+            &lab::Matrix<float, 4, 4>::GetInverse,
+            DXInverse
+		>::Benchmark_Each_Accuracy<float, MatAbst>(50, -100.f, 100.f);
+		PrintResults("mat inverse", mismatchResults, epsilon);
+    }
+    {
+        auto mismatchResults = BATS::FunctionAbstraction<
+            float,
+            &lab::Matrix<float, 4, 4>::GetDeterminant,
+            D3DXMatrixDeterminant
+		>::Benchmark_Each_Accuracy<float, MatAbst>(50, -100.f, 100.f);
+        PrintResults("mat determ", mismatchResults, epsilon);
+    }
+    {
+
+    }
+	
+
     return EXIT_SUCCESS;
 }

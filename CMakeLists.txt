@@ -21,7 +21,7 @@ if(NOT DX9_PATH)
 endif()
 
 
-file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.*)
+file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.* ${PROJECT_SOURCE_DIR}/BATS/*.*)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
@@ -46,6 +46,7 @@ option(USE_AVX2_INTERNAL "Enable AVX2 optimizations" ON)
   endif()
 
 add_compile_definitions(LAB_ROW_MAJOR)
+add_compile_definitions(LAB_LEFT_HANDED)
 
 message(STATUS "including directories")
 target_include_directories(${PROJECT_NAME} PUBLIC
